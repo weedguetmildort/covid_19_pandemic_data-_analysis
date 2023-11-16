@@ -67,3 +67,56 @@ WHERE continent IS NOT NULL;
 SELECT *
 FROM covid_pandemic_database.covid_vaccinations;
 
+-- Show percentage of population that has received at least one Covid vaccine
+SELECT cv.continent, cv.location, cv.date, cd.population, cv.new_vaccinations,
+       SUM(cv.new_vaccinations) OVER (PARTITION BY cd.location ORDER BY cd.location, cd.date)
+           AS RollingPeopleVaccinated
+FROM covid_pandemic_database.covid_vaccinations AS cv
+    JOIN covid_pandemic_database.covid_deaths AS cd
+        ON cv.location = cd.location AND cv.date = cd.date
+WHERE cv.new_vaccinations IS NOT NULL
+AND cv.continent IS NOT NULL
+ORDER BY cv.continent, cv.location;
+
+-- Use Common Table Expressions (CTE) to perform more calculations on partition by in previous query
+WITH PopulationVaccination (continent, location, date, population, new_vaccinations, RollingPeopleVaccinated)
+AS
+(
+SELECT cv.continent, cv.location, cv.date, cd.population, cv.new_vaccinations,
+       SUM(cv.new_vaccinations) OVER (PARTITION BY cd.location ORDER BY cd.location, cd.date)
+           AS RollingPeopleVaccinated
+FROM covid_pandemic_database.covid_vaccinations AS cv
+    JOIN covid_pandemic_database.covid_deaths AS cd
+        ON cv.location = cd.location AND cv.date = cd.date
+WHERE cv.new_vaccinations IS NOT NULL
+AND cv.continent IS NOT NULL
+)
+SELECT *, (RollingPeopleVaccinated/population) * 100 AS PercentageVaccinations
+FROM PopulationVaccination
+ORDER BY continent, location, date;
+
+-- Use temporary table to perform calculation on partition by in previous query
+DROP TABLE IF EXISTS covid_pandemic_database.PercentPopulationVaccinated;
+CREATE TABLE covid_pandemic_database.PercentPopulationVaccinated
+(
+continent NVARCHAR(255),
+location NVARCHAR(255),
+date TEXT,
+population NUMERIC,
+new_vaccinations NUMERIC,
+RollingPeopleVaccinated NUMERIC
+);
+
+INSERT INTO covid_pandemic_database.PercentPopulationVaccinated
+SELECT cv.continent, cv.location, cv.date, cd.population, cv.new_vaccinations,
+       SUM(cv.new_vaccinations) OVER (PARTITION BY cd.location ORDER BY cd.location, cd.date)
+           AS RollingPeopleVaccinated
+FROM covid_pandemic_database.covid_vaccinations AS cv
+    JOIN covid_pandemic_database.covid_deaths AS cd
+        ON cv.location = cd.location AND cv.date = cd.date
+WHERE cv.new_vaccinations IS NOT NULL
+AND cv.continent IS NOT NULL
+ORDER BY cv.continent, cv.location;
+
+SELECT *, (RollingPeopleVaccinated/Population) * 100
+FROM covid_pandemic_database.PercentPopulationVaccinated;
